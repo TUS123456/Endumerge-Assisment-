@@ -1,0 +1,354 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  ADMISSION_OFFICER
+  MANAGEMENT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(ADMISSION_OFFICER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// MASTER SETUP
+// ─────────────────────────────────────────────
+
+model Institution {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campuses  Campus[]
+}
+
+model Campus {
+  id            String      @id @default(cuid())
+  institutionId String
+  code          String
+  name          String
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  departments   Department[]
+
+  @@unique([institutionId, code])
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  campusId  String
+  code      String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campus    Campus   @relation(fields: [campusId], references: [id])
+  programs  Program[]
+
+  @@unique([campusId, code])
+}
+
+model Program {
+  id            String     @id @default(cuid())
+  departmentId  String
+  courseTypeId  String
+  code          String
+  name          String
+  durationYears Int        @default(4)
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  department    Department @relation(fields: [departmentId], references: [id])
+  courseType    CourseType @relation(fields: [courseTypeId], references: [id])
+  seatMatrices  SeatMatrix[]
+  applicants    Applicant[]
+}
+
+model AcademicYear {
+  id         String   @id @default(cuid())
+  label      String   @unique
+  startYear  Int
+  endYear    Int
+  isCurrent  Boolean  @default(false)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  seatMatrices SeatMatrix[]
+  applicants   Applicant[]
+}
+
+model CourseType {
+  id       String    @id @default(cuid())
+  code     String    @unique
+  name     String
+  isActive Boolean   @default(true)
+
+  programs Program[]
+}
+
+model EntryType {
+  id         String      @id @default(cuid())
+  code       String      @unique
+  name       String
+  isActive   Boolean     @default(true)
+
+  applicants Applicant[]
+}
+
+model AdmissionMode {
+  id         String      @id @default(cuid())
+  code       String      @unique
+  name       String
+  isActive   Boolean     @default(true)
+
+  applicants Applicant[]
+}
+
+// ─────────────────────────────────────────────
+// SEAT MATRIX & QUOTAS
+// ─────────────────────────────────────────────
+
+enum QuotaType {
+  KCET
+  COMEDK
+  MANAGEMENT
+  NRI
+  SNQ
+}
+
+model SeatMatrix {
+  id             String   @id @default(cuid())
+  programId      String
+  academicYearId String
+  totalIntake    Int
+  isLocked       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  program        Program      @relation(fields: [programId], references: [id])
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  quotas         QuotaConfig[]
+  applicants     Applicant[]
+
+  @@unique([programId, academicYearId])
+}
+
+model QuotaConfig {
+  id            String    @id @default(cuid())
+  seatMatrixId  String
+  quotaType     QuotaType
+  totalSeats    Int
+  supernumerary Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  seatMatrix    SeatMatrix   @relation(fields: [seatMatrixId], references: [id])
+  allocations   Allocation[]
+
+  @@unique([seatMatrixId, quotaType])
+}
+
+// ─────────────────────────────────────────────
+// APPLICANTS
+// ─────────────────────────────────────────────
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Category {
+  GM
+  SC
+  ST
+  OBC
+  EWS
+  CAT1
+  CAT2A
+  CAT2B
+  CAT3A
+  CAT3B
+  PH
+  NRI
+}
+
+enum ApplicantStatus {
+  PENDING
+  ALLOCATED
+  CONFIRMED
+  REJECTED
+  CANCELLED
+}
+
+model Applicant {
+  id              String          @id @default(cuid())
+  applicationNo   String          @unique
+  academicYearId  String
+  programId       String
+  seatMatrixId    String
+  entryTypeId     String
+  admissionModeId String
+
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime
+  gender          Gender
+  email           String
+  phone           String
+  address         String?
+  category        Category        @default(GM)
+  religion        String?
+  domicileState   String?
+
+  qualifyingExam  String?
+  marksObtained   Float?
+  maxMarks        Float?
+  percentile      Float?
+  rankNumber      String?
+
+  status          ApplicantStatus @default(PENDING)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  academicYear    AcademicYear  @relation(fields: [academicYearId], references: [id])
+  program         Program       @relation(fields: [programId], references: [id])
+  seatMatrix      SeatMatrix    @relation(fields: [seatMatrixId], references: [id])
+  entryType       EntryType     @relation(fields: [entryTypeId], references: [id])
+  admissionMode   AdmissionMode @relation(fields: [admissionModeId], references: [id])
+
+  documents       Document[]
+  allocation      Allocation?
+  admission       Admission?
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENTS
+// ─────────────────────────────────────────────
+
+enum DocumentType {
+  SSLC_MARKS_CARD
+  PUC_MARKS_CARD
+  KCET_RANK_CARD
+  COMEDK_RANK_CARD
+  CATEGORY_CERTIFICATE
+  INCOME_CERTIFICATE
+  DOMICILE_CERTIFICATE
+  TRANSFER_CERTIFICATE
+  CONDUCT_CERTIFICATE
+  PASSPORT_PHOTO
+  AADHAR_CARD
+}
+
+enum DocumentStatus {
+  PENDING
+  SUBMITTED
+  VERIFIED
+  REJECTED
+}
+
+model Document {
+  id          String         @id @default(cuid())
+  applicantId String
+  docType     DocumentType
+  status      DocumentStatus @default(PENDING)
+  remarks     String?
+  verifiedBy  String?
+  verifiedAt  DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  applicant   Applicant      @relation(fields: [applicantId], references: [id])
+
+  @@unique([applicantId, docType])
+}
+
+// ─────────────────────────────────────────────
+// ALLOCATION
+// ─────────────────────────────────────────────
+
+model Allocation {
+  id              String   @id @default(cuid())
+  applicantId     String   @unique
+  quotaConfigId   String
+  allotmentNumber String?
+  allocatedBy     String
+  allocatedAt     DateTime @default(now())
+  isLocked        Boolean  @default(true)
+  remarks         String?
+
+  applicant   Applicant   @relation(fields: [applicantId], references: [id])
+  quotaConfig QuotaConfig @relation(fields: [quotaConfigId], references: [id])
+  admission   Admission?
+}
+
+// ─────────────────────────────────────────────
+// ADMISSION
+// ─────────────────────────────────────────────
+
+enum FeeStatus {
+  PENDING
+  PAID
+  WAIVED
+  REFUNDED
+}
+
+model Admission {
+  id              String    @id @default(cuid())
+  applicantId     String    @unique
+  allocationId    String    @unique
+  admissionNumber String    @unique
+  feeStatus       FeeStatus @default(PENDING)
+  feePaidAt       DateTime?
+  feePaidBy       String?
+  confirmedAt     DateTime?
+  confirmedBy     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  applicant  Applicant  @relation(fields: [applicantId], references: [id])
+  allocation Allocation @relation(fields: [allocationId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  meta       String?
+  createdAt  DateTime @default(now())
+}
